@@ -1,11 +1,20 @@
-import letsql as ls
-import pyarrow as pa
 import io
 import pathlib
-from PIL import Image
+import random
 import urllib.request
 
+import ibis.expr.datatypes as dt
+import letsql as ls
+import pyarrow as pa
+from PIL import Image
+from ibis import udf
+
 IMAGE_FORMAT = "JPEG"
+
+
+@udf.scalar.builtin
+def segment_anything(path: str, img: dt.binary, s: list[float]) -> dt.binary:
+    """Run Segment Anything in a Binary Column"""
 
 
 def get_blob(path):
@@ -19,22 +28,25 @@ def get_blob(path):
 
 images_folder = pathlib.Path.cwd() / "assets"
 
-data = [(int(file.stem), file.name, get_blob(file)) for file in sorted(images_folder.iterdir(), key=str)]
+data = [
+    (int(file.stem), file.name, get_blob(file))
+    for file in sorted(images_folder.iterdir(), key=str)
+]
 ids, names, images = zip(*data)
-print(names)
 
+# create and register table
 table = pa.Table.from_arrays(
     [
         pa.array(ids),
         pa.array(names),
+        pa.array([random.uniform(0.3, 1) for _ in range(10)], type=pa.float64()),
         pa.array(images, type=pa.binary()),
     ],
-    names=["id", "name", "data"],
+    names=["id", "name", "sensitivity", "image"],
 )
 
-# create table
 con = ls.connect()
-images = con.register(table, table_name="images")
+t = con.register(table, table_name="images")
 
 # download model
 SAM_MODEL_URL = "https://storage.googleapis.com/letsql-assets/models/mobile_sam-tiny-vitt.safetensors"
@@ -42,10 +54,16 @@ model_path = "mobile_sam-tiny-vitt.safetensors"
 urllib.request.urlretrieve(SAM_MODEL_URL, model_path)
 
 
-expr = images.data.segment_anything(str(model_path), [0.5, 0.6]).name("segmented")
+expr = (
+    t.select(
+        [
+            "id",
+            "sensitivity",
+            segment_anything(str(model_path), t.image, [0.5, 0.6]).name("segmented"),
+        ]
+    )
+    .filter([t.sensitivity >= 0.5])
+    .limit(3)
+)
+
 result = expr.execute()
-
-
-for i, data in enumerate(result.to_list()):
-    image = Image.open(io.BytesIO(data))
-    image.save(f"output_{i}.jpeg")
