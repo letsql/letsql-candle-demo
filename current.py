@@ -23,11 +23,11 @@ def segment_anything(model, paths, seed):
         input_point = np.array([[int(rows * seed[0]), int(cols * seed[1])]])
         input_label = np.array([1])
 
-        mask, _, _ = model.predict(
+        mask, iou_score, _ = model.predict(
             point_coords=input_point, point_labels=input_label, multimask_output=True
         )
 
-        masks.append(mask)
+        masks.append({"mask": mask, "iou_score": iou_score.mean()})
 
     return masks
 
@@ -45,15 +45,21 @@ t = pd.DataFrame(data, columns=["id", "name", "sensitivity", "image"])
 model_type = "vit_h"
 checkpoint = "sam_vit_h_4b8939.pth"
 
-SAM_MODEL_URL = "https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth"
-model_path = checkpoint
-urllib.request.urlretrieve(SAM_MODEL_URL, model_path)
+# SAM_MODEL_URL = "https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth"
+# model_path = checkpoint
+# urllib.request.urlretrieve(SAM_MODEL_URL, model_path)
 
 sam = sam_model_registry[model_type](checkpoint=checkpoint)
 sam.to(device="cpu")
 predictor = SamPredictor(sam)
 
 t = t[t["sensitivity"] >= 0.5]
-t.assign(segmented=segment_anything(predictor, t["image"], [0.5, 0.6]))[
+df = t.assign(segmented=segment_anything(predictor, t["image"], [0.5, 0.6]))[
     ["id", "sensitivity", "segmented"]
 ].head(3)
+
+# https://stackoverflow.com/a/55355928/4001592
+expanded_info = pd.json_normalize(df["segmented"])
+df = pd.concat([df.drop("segmented", axis=1), expanded_info], axis=1)
+
+df = df[df["iou_score"] >= 0.8]

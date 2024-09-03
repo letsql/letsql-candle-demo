@@ -6,14 +6,20 @@ import urllib.request
 import ibis.expr.datatypes as dt
 import letsql as ls
 import pyarrow as pa
-from PIL import Image
+
 from ibis import udf
+from PIL import Image
+from letsql.common.caching import SourceStorage
+from letsql import _
+
 
 IMAGE_FORMAT = "JPEG"
 
 
 @udf.scalar.builtin
-def segment_anything(path: str, img: dt.binary, s: list[float]) -> dt.binary:
+def segment_anything(path: str, img: dt.binary, s: list[float]) -> dt.Struct(
+    {"mask": dt.Array[float], "iou_score": float}
+):
     """Run Segment Anything in a Binary Column"""
 
 
@@ -53,7 +59,7 @@ SAM_MODEL_URL = "https://storage.googleapis.com/letsql-assets/models/mobile_sam-
 model_path = "mobile_sam-tiny-vitt.safetensors"
 urllib.request.urlretrieve(SAM_MODEL_URL, model_path)
 
-
+storage = SourceStorage(source=ls.duckdb.connect())
 expr = (
     t.select(
         [
@@ -64,6 +70,10 @@ expr = (
     )
     .filter([t.sensitivity >= 0.5])
     .limit(3)
+    .cache(storage)
+    .filter([_.segmented.iou_score > 0.5])
+    .select([_.id, _.sensitivity, _.segmented.iou_score, _.segmented.mask])
 )
 
 result = expr.execute()
+print(result)
