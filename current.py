@@ -45,9 +45,9 @@ t = pd.DataFrame(data, columns=["id", "name", "sensitivity", "image"])
 model_type = "vit_h"
 checkpoint = "sam_vit_h_4b8939.pth"
 
-# SAM_MODEL_URL = "https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth"
-# model_path = checkpoint
-# urllib.request.urlretrieve(SAM_MODEL_URL, model_path)
+SAM_MODEL_URL = "https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth"
+model_path = checkpoint
+urllib.request.urlretrieve(SAM_MODEL_URL, model_path)
 
 sam = sam_model_registry[model_type](checkpoint=checkpoint)
 sam.to(device="cpu")
@@ -62,4 +62,5 @@ df = t.assign(segmented=segment_anything(predictor, t["image"], [0.5, 0.6]))[
 expanded_info = pd.json_normalize(df["segmented"])
 df = pd.concat([df.drop("segmented", axis=1), expanded_info], axis=1)
 
-df = df[df["iou_score"] >= 0.8]
+df = df[df["iou_score"] > 0.5]
+print(df)
