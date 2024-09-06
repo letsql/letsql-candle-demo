@@ -55,9 +55,9 @@ con = ls.connect()
 t = con.register(table, table_name="images")
 
 # download model
-# SAM_MODEL_URL = "https://storage.googleapis.com/letsql-assets/models/mobile_sam-tiny-vitt.safetensors"
+SAM_MODEL_URL = "https://storage.googleapis.com/letsql-assets/models/mobile_sam-tiny-vitt.safetensors"
 model_path = "mobile_sam-tiny-vitt.safetensors"
-# urllib.request.urlretrieve(SAM_MODEL_URL, model_path)
+urllib.request.urlretrieve(SAM_MODEL_URL, model_path)
 
 storage = SourceStorage(source=ls.duckdb.connect())
 expr = (

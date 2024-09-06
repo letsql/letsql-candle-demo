@@ -1,15 +1,14 @@
 import pathlib
 import random
 import urllib.request
-import torch
+
 import numpy as np
-from segment_anything import sam_model_registry, SamPredictor
-from PIL import Image
-
 import pandas as pd
+from PIL import Image
+from segment_anything import sam_model_registry, SamPredictor
 
 
-def segment_anything(model, paths, seed):
+def pandas_sam_predict(model, paths, seed):
     masks = []
     for path in paths:
         # Load an image
@@ -27,7 +26,7 @@ def segment_anything(model, paths, seed):
             point_coords=input_point, point_labels=input_label, multimask_output=True
         )
 
-        masks.append({"mask": mask, "iou_score": iou_score.mean()})
+        masks.append({"mask": mask[iou_score.argmax()], "iou_score": iou_score.max()})
 
     return masks
 
@@ -54,7 +53,7 @@ sam.to(device="cpu")
 predictor = SamPredictor(sam)
 
 t = t[t["sensitivity"] >= 0.5]
-df = t.assign(segmented=segment_anything(predictor, t["image"], [0.5, 0.6]))[
+df = t.assign(segmented=pandas_sam_predict(predictor, t["image"], [0.5, 0.6]))[
     ["id", "sensitivity", "segmented"]
 ].head(3)
 
